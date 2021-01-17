@@ -5,17 +5,36 @@ import java.nio.file.Paths;
 import java.util.regex.Pattern;
 
 public class Project {
+    private static final String MAIN_SOURCE_PATH = "src/main/java";
+    private static final String GIT_META_PATH = ".git";
+    private static final String MAIN_RESOURCE_PATH = "src/main/resources";
+    private static final String BUILD_PATH = "build";
+    private static final String LIB_PATH = "lib";
+
+    /**
+     * Find the project root by searching up the directory ancestry
+     * for a path containing the {@link Project#MAIN_SOURCE_PATH}.
+     * Falls back to using a path containing the .git metadata directory.
+     */
     private Path calculateProjectPath() {
         var path = Paths.get(System.getProperty("user.dir")).toAbsolutePath();
         var root = path.getRoot();
+        Path alternatePath = null;
         while (path != null && !root.equals(path)) {
-            if (path.resolve(".git").toFile().exists()) {
+            // Use the path containing the default source directory structure
+            if (path.resolve(MAIN_SOURCE_PATH).toFile().exists()) {
                 return path;
             } else {
+                // Alternately use the path containing a Git repository
+                var gitMetaDir = path.resolve(GIT_META_PATH).toFile(); 
+                if (gitMetaDir.exists() && gitMetaDir.isDirectory()) {
+                    alternatePath = path;
+                }
+
                 path = path.getParent();
             }
         }
-        return null;
+        return alternatePath;
     }
 
     private Path _projectPath;
@@ -26,10 +45,10 @@ public class Project {
 
     public Project() {
         _projectPath = calculateProjectPath();
-        _sourcePath = _projectPath.resolve("src/main/java");
-        _resourcePath = _projectPath.resolve("src/main/resources");
-        _buildPath = _projectPath.resolve("build");
-        _libPath = _projectPath.resolve("lib");
+        _sourcePath = _projectPath.resolve(MAIN_SOURCE_PATH);
+        _resourcePath = _projectPath.resolve(MAIN_RESOURCE_PATH);
+        _buildPath = _projectPath.resolve(BUILD_PATH);
+        _libPath = _projectPath.resolve(LIB_PATH);
         _buildPath.toFile().mkdirs();
         _libPath.resolve("main").toFile().mkdirs();
         _libPath.resolve("transitive").toFile().mkdirs();
@@ -57,7 +76,22 @@ public class Project {
     }
 
     public Path getModulePath() {
-        for (var file: getSourcePath().toFile().listFiles()) {
+        var sourcePath = getSourcePath();
+        if (sourcePath == null) {
+            System.err.println(
+                    "A valid source path was not found.");
+            System.exit(-1);
+        }
+        var sourceFile = sourcePath.toFile();
+        if (sourceFile == null || !sourceFile.isDirectory()) {
+            System.err.println(
+                    "Path does not exist \"" +
+                    MAIN_SOURCE_PATH +
+                    "\" in project \"" +
+                    _projectPath + "\"");
+            System.exit(-1);
+        }
+        for (var file: sourceFile.listFiles()) {
             if (!file.getName().startsWith(".")) {
                 return file.toPath();
             }
